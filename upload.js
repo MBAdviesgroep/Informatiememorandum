@@ -121,6 +121,22 @@ function getOutputText(response) {
   return parts.join('\n').trim();
 }
 
+/* Maakt de modeloutput schoon tot pure JSON:
+   - verwijdert ```json ... ``` code-fences
+   - knipt alles vóór de eerste { en ná de laatste } weg
+   - valideert met JSON.parse (gooit als het echt geen JSON is) */
+function cleanJson(text) {
+  let t = (text || '').trim();
+  t = t.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+  const first = t.indexOf('{');
+  const last = t.lastIndexOf('}');
+  if (first !== -1 && last !== -1 && last > first) {
+    t = t.slice(first, last + 1);
+  }
+  JSON.parse(t); // valideer; bij fout vangt de handler dit op
+  return t;
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Only POST allowed' });
@@ -159,12 +175,14 @@ export default async function handler(req, res) {
       response = await client.responses.create({
         model: 'gpt-4.1',
         input: [{ role: 'user', content }],
+        text: { format: { type: 'json_object' } },
       });
     } catch (firstErr) {
       if (firstErr?.status === 429 || String(firstErr?.message || '').includes('429')) {
         response = await client.responses.create({
           model: 'gpt-4.1-mini',
           input: [{ role: 'user', content }],
+          text: { format: { type: 'json_object' } },
         });
       } else {
         throw firstErr;
@@ -176,8 +194,19 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: 'AI gaf geen tekst terug.' });
     }
 
+    let cleaned;
+    try {
+      cleaned = cleanJson(outputText);
+    } catch (parseErr) {
+      console.error('JSON parse mislukt. Ruwe output:', outputText);
+      return res.status(502).json({
+        error: 'AI gaf geen geldige JSON terug.',
+        raw: outputText.slice(0, 4000),
+      });
+    }
+
     // De frontend verwacht { success:true, data:'JSON-string' }.
-    return res.status(200).json({ success: true, data: outputText });
+    return res.status(200).json({ success: true, data: cleaned });
   } catch (error) {
     console.error('Generate-report error:', error);
     return res.status(500).json({ error: error.message || 'AI-verwerking mislukt' });
