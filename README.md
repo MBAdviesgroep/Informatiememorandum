@@ -55,3 +55,16 @@ De frontend kan ook oude responses verwerken waarin `data` nog een JSON-string i
 ## Belangrijk
 
 De prompt en het schema verbieden voorbeelddata. Als informatie ontbreekt, moet de agent dat markeren met bijvoorbeeld `Niet opgenomen in bron`, `Nog te controleren`, `Aanvullen door adviseur` of `Afstemmen met actuele opgave`. Numerieke velden blijven 0 als het bedrag niet betrouwbaar uit brondata komt.
+
+
+## Fix: Vercel Blob client token
+
+Deze versie gebruikt `handleUpload` in `api/upload.js`. Dat is de officiële flow voor browseruploads met `@vercel/blob/client`.
+
+Controleer in Vercel:
+
+1. Storage > Blob > connect deze store aan hetzelfde project.
+2. Environment Variables bevat `BLOB_READ_WRITE_TOKEN` voor Production en Preview.
+3. Redeploy het project nadat de environment variable is toegevoegd.
+
+Zonder deze token stopt de upload bij: `Vercel Blob: Failed to retrieve the client token`.
